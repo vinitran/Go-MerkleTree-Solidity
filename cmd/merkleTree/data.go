@@ -31,3 +31,16 @@ func (d Data) GetAmount() *big.Int {
 func (d Data) GetAddress() common.Address {
 	return common.HexToAddress(d.Address)
 }
+
+func ParseToDataMerkleTree(tmp [][]string) []Data {
+	var data []Data
+	for _, t := range tmp {
+		dt := Data{
+			Address: t[0],
+			Amount:  t[1][1:],
+		}
+		data = append(data, dt)
+	}
+
+	return data
+}

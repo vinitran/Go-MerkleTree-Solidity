@@ -1,20 +1,45 @@
 package main
 
-import "MerkleProof/cmd/merkleTree"
+import (
+	"MerkleProof/cmd/merkleTree"
+	"fmt"
+)
 
 func main() {
-	data := []merkleTree.Data{
-		{Address: "0x1111111111111111111111111111111111111111", Amount: "5000000000000000000"},
-		{Address: "0x1111111111111111111111111111111111111112", Amount: "6000000000000000000"},
-		{Address: "0x1111111111111111111111111111111111111113", Amount: "7000000000000000000"},
-		{Address: "0x1111111111111111111111111111111111111114", Amount: "8000000000000000000"},
+	//get data from csv file
+	csvData, err := ReadCsv(csvPath)
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
 
-	merkleTree.InitAndVerify(data)
+	data := merkleTree.ParseToDataMerkleTree(csvData)
 
-	//err = CallContract(merkleTree.Root(), proof.ProofHashes(), data[1].GetAddress(), data[1].GetAmount())
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
+	mkTree, err := merkleTree.NewTree(data)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
+	proof, err := mkTree.AllProof()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	type TreeData struct {
+		Root  string             `json:"root"`
+		Proof []merkleTree.Proof `json:"proof"`
+	}
+
+	treeData := TreeData{
+		Root:  mkTree.Root(),
+		Proof: proof,
+	}
+
+	err = WriteDataToFileAsJSON(treeData, jsonPath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 }

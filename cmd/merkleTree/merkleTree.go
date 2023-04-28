@@ -2,48 +2,90 @@ package merkleTree
 
 import (
 	"fmt"
-	"github.com/ComposableFi/go-merkle-trees/hasher"
-	"github.com/ComposableFi/go-merkle-trees/merkle"
+	solmerkle "github.com/0xKiwi/sol-merkle-tree-go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func InitAndVerify(data []Data) {
+type MerkleTree struct {
+	//mk merkle.Tree
+	mk    *solmerkle.MerkleTree
+	leave [][]byte
+}
+
+type Proof struct {
+	Leaf  string   `json:"leaf"`
+	Proof []string `json:"proof"`
+}
+
+func NewTree(data []Data) (MerkleTree, error) {
 	var leaves [][]byte
 	for _, d := range data {
 		leaves = append(leaves, d.Hash())
 	}
 
-	//init markle tree with type hash
-	merkleTree := merkle.NewTree(hasher.Keccak256Hasher{})
-	//add leaves to merkle tree
-	merkleTree, err := merkleTree.FromLeaves(leaves)
+	tree, err := solmerkle.GenerateTreeFromHashedItems(leaves)
 	if err != nil {
-		fmt.Printf("err: %e\n", err)
-		return
+		return MerkleTree{}, fmt.Errorf("could not generate trie: %v", err)
 	}
 
-	root := merkleTree.Root()
-	fmt.Printf("Merkle root is %s \n", hexutil.Encode(merkleTree.Root()))
+	return MerkleTree{
+		mk:    tree,
+		leave: leaves,
+	}, nil
+}
 
-	leafIndexInArray := []uint64{1}
-	proof := merkleTree.Proof(leafIndexInArray)
+func (tree MerkleTree) Root() string {
+	return hexutil.Encode(tree.mk.Root())
+}
 
-	fmt.Printf("Merkle proof hashes are:\n")
-	for _, v := range proof.ProofHashesHex() {
-		fmt.Printf(" - 0x%v\n", v)
-	}
-
-	// verify merkle proof
-	verifyResult, err := proof.Verify(root)
+func (tree MerkleTree) ProofByIndex(index int) ([]string, error) {
+	proof, err := tree.Proof(tree.leave[index])
 	if err != nil {
-		fmt.Printf("err: %e\n", err)
-		return
+		return nil, err
 	}
 
-	if !verifyResult {
-		fmt.Printf("err: %s\n", "Merkle proof verify result is false")
-		return
+	return proof, nil
+}
+
+func (tree MerkleTree) Proof(data []byte) ([]string, error) {
+	var proofStringArr []string
+	proof, err := tree.mk.MerkleProof(data)
+	if err != nil {
+		return nil, fmt.Errorf("could not generate proof: %v", err)
 	}
 
-	fmt.Printf("Merkle proof verify result is %v\n", verifyResult)
+	for _, p := range proof {
+		proofStringArr = append(proofStringArr, hexutil.Encode(p))
+	}
+
+	return proofStringArr, nil
+}
+
+func (tree MerkleTree) AllProof() ([]Proof, error) {
+	var proof []Proof
+
+	for _, leaf := range tree.leave {
+		leafString := hexutil.Encode(leaf)
+		pr, err := tree.Proof(leaf)
+		if err != nil {
+			return nil, err
+		}
+
+		proof = append(proof, Proof{
+			Leaf:  leafString,
+			Proof: pr,
+		})
+	}
+
+	return proof, nil
+}
+
+func (tree MerkleTree) Verify(index int) (bool, error) {
+	root := tree.mk.Root()
+	proof, err := tree.mk.MerkleProof(tree.leave[index])
+	if err != nil {
+		return false, fmt.Errorf("could not generate proof: %v", err)
+	}
+	leaf := tree.leave[index]
+	return solmerkle.VerifyMerkleBranch(root, leaf, proof), nil
 }
